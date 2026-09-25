@@ -3,9 +3,32 @@
 # The package must already be installed in that env (pip install -e .).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PYTHON="/opt/anaconda3/envs/latex-snipper/bin/python"
-if [[ ! -x "$PYTHON" ]]; then
-  echo "Missing $PYTHON. Create the conda env first." >&2
+PYTHON=""
+base=""
+if [[ -n "${CONDA_EXE:-}" ]]; then
+  base="$(cd "$(dirname "$CONDA_EXE")/.." && pwd)"
+elif command -v conda >/dev/null 2>&1; then
+  base="$(conda info --base 2>/dev/null || true)"
+fi
+candidates=()
+if [[ -n "$base" ]]; then
+  candidates+=("$base/envs/latex-snipper/bin/python")
+fi
+candidates+=(
+  "/opt/anaconda3/envs/latex-snipper/bin/python"
+  "/opt/miniconda3/envs/latex-snipper/bin/python"
+  "$HOME/anaconda3/envs/latex-snipper/bin/python"
+  "$HOME/miniconda3/envs/latex-snipper/bin/python"
+  "$HOME/miniforge3/envs/latex-snipper/bin/python"
+)
+for candidate in "${candidates[@]}"; do
+  if [[ -x "$candidate" ]]; then
+    PYTHON="$candidate"
+    break
+  fi
+done
+if [[ -z "$PYTHON" ]]; then
+  echo "Could not find the latex-snipper conda environment. Create it first." >&2
   exit 1
 fi
 APP="$ROOT/dist/TexGrab.app"
