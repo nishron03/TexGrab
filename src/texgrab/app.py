@@ -12,6 +12,8 @@ from texgrab.capture.region import grab_region
 from texgrab.clipboard import write_text
 from texgrab.config import Config, save_config
 from texgrab.hotkey.carbon import HotKeyManager
+from texgrab.hotkey.combo import apply_shortcut
+from texgrab.hotkey.recorder import prompt_for_shortcut
 from texgrab.log import get_logger, set_debug
 from texgrab.mainthread import call_on_main, call_on_main_sync
 from texgrab.notify import notify
@@ -41,6 +43,10 @@ class TexGrabApp(rumps.App):
         self.debug_item = rumps.MenuItem("Debug logging", callback=self._toggle_debug)
         self.notify_item.state = 1 if config.notifications else 0
         self.debug_item.state = 1 if config.debug else 0
+        self.shortcut_change_item = rumps.MenuItem(
+            "Change shortcut…", callback=self._change_shortcut
+        )
+        self._recording_shortcut = False
         self.test_item = rumps.MenuItem("Test OCR", callback=self._test_ocr)
         self.quit_item = rumps.MenuItem("Quit", callback=self._quit)
         self.menu = [
@@ -48,7 +54,10 @@ class TexGrabApp(rumps.App):
             self.status_item,
             self.shortcut_item,
             self.test_item,
-            [rumps.MenuItem("Preferences"), [self.notify_item, self.debug_item]],
+            [
+                rumps.MenuItem("Preferences"),
+                [self.notify_item, self.debug_item, self.shortcut_change_item],
+            ],
             None,
             self.quit_item,
         ]
@@ -151,6 +160,66 @@ class TexGrabApp(rumps.App):
         save_config(self.config)
         set_debug(self.config.debug)
         get_logger().info("debug=%s", self.config.debug)
+
+    def _change_shortcut(self, _sender) -> None:
+        if self._recording_shortcut:
+            return
+        self._recording_shortcut = True
+        # Drop the current hotkey so the same chord can be pressed into the recorder.
+        try:
+            self._hotkey.unregister()
+        except Exception:
+            get_logger().exception("shortcut unregister failed")
+        prompt_for_shortcut(self.config.shortcut_label, self._shortcut_chosen)
+
+    def _shortcut_chosen(self, choice) -> None:
+        self._recording_shortcut = False
+        if choice is None:
+            self._reregister_shortcut()
+            get_logger().info("shortcut change cancelled")
+            return
+        previous = self._shortcut_snapshot()
+        apply_shortcut(self.config, choice)
+        if not self._reregister_shortcut():
+            self._restore_shortcut(previous)
+            self._reregister_shortcut()
+            rumps.alert(
+                title="TexGrab",
+                message="That shortcut could not be registered. It may already be in use.",
+                ok="OK",
+            )
+            return
+        save_config(self.config)
+        get_logger().info("shortcut changed to %s", self.config.shortcut_label)
+
+    def _shortcut_snapshot(self):
+        config = self.config
+        return (
+            config.shortcut_key,
+            config.shortcut_command,
+            config.shortcut_control,
+            config.shortcut_shift,
+            config.shortcut_option,
+        )
+
+    def _restore_shortcut(self, snapshot) -> None:
+        (
+            self.config.shortcut_key,
+            self.config.shortcut_command,
+            self.config.shortcut_control,
+            self.config.shortcut_shift,
+            self.config.shortcut_option,
+        ) = snapshot
+
+    def _reregister_shortcut(self) -> bool:
+        try:
+            self._hotkey.register()
+        except Exception:
+            get_logger().exception("shortcut registration failed")
+            self.shortcut_item.title = "Shortcut: failed to register"
+            return False
+        self.shortcut_item.title = f"Shortcut: {self.config.shortcut_label}"
+        return True
 
     def _quit(self, _sender) -> None:
         try:

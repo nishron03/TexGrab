@@ -71,6 +71,13 @@ def keycode_for(key: str) -> int:
     return code
 
 
+def name_for_keycode(code: int) -> str | None:
+    for name, value in _KEYCODES.items():
+        if value == code:
+            return name
+    return None
+
+
 def modifier_mask(
     *,
     command: bool,

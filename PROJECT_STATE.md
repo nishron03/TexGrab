@@ -2,7 +2,7 @@
 
 ## Current Status
 
-TexGrab is not running. Fenced matrices are detected and scaled to about 40 pixels per row, then recognized with pix2tex's single-line resizer turned off. A rendered 2 by 2 bracket matrix of digits returned `\left[\begin{array}{l l}{1}&{2}\\ {3}&{4}\end{array}\right]`. Ordinary formulas still use the default resizer. Restart `scripts/run.sh` to pick this up.
+TexGrab is not running. On branch `custom-hotkey` (baseline is `main`), Preferences → Change shortcut… records a new global hotkey and registers it immediately. The default remains ⌘⌃⇧S. A chord must include ⌘ or ⌃. Fenced matrices are still scaled and recognized with the single-line resizer off.
 
 ## Architecture
 
@@ -64,3 +64,4 @@ Nothing is mid-implementation. The remaining check is the manual pass in `tests/
 - Menu-bar process started, reached `pix2tex model ready`, and was stopped with SIGTERM so this session would not leave a shortcut registered. Build of `dist/TexGrab.app` verified with `plutil`.
 - 01:33: Started `scripts/run.sh`. Log: shortcut registered, screen recording granted, model ready. The user stopped that process; it was not restarted.
 - 02:04: Matrix path. Reading each cell failed (a clean digit `1` became `\bigcup_{i}`). Scaling the whole fenced grid to ~80px tall and calling `LatexOCR` with `resize=False` returned the correct `1 & 2 \\ 3 & 4` array. A fraction and a one-line formula still take the normal path. `tests/test_matrix.py`: 7 passed.
+- 2026-09-25: Git repository created. `main` is the initial snipper. Shortcut editing is on branch `custom-hotkey`: Preferences → Change shortcut…, saved in the existing config file, Carbon hotkey replaced live. ⌘ or ⌃ is required.
