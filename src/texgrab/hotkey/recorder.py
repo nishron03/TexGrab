@@ -1,13 +1,24 @@
-"""A small window that records the next key combination."""
+"""A small window that records the next key combination.
+
+A menu-bar app is not the active application, so a window it opens does not
+receive keystrokes. The status menu then closes and gives focus back to the
+previous app. Showing the recorder on the next turn, and briefly becoming a
+normal foreground app, is what lets the key and Escape arrive.
+"""
 
 from __future__ import annotations
 
 import objc
 from AppKit import (
+    NSApplication,
+    NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered,
+    NSEvent,
+    NSEventMaskKeyDown,
     NSFloatingWindowLevel,
     NSTextField,
     NSWindow,
+    NSWindowCollectionBehaviorMoveToActiveSpace,
     NSWindowStyleMaskClosable,
     NSWindowStyleMaskTitled,
 )
@@ -29,8 +40,8 @@ def prompt_for_shortcut(current_label: str, callback) -> None:
 
     recorder = _ShortcutWindow.alloc().initWithCallback_currentLabel_(finished, current_label)
     _active = recorder
-    recorder.center()
-    recorder.makeKeyAndOrderFront_(None)
+    # Wait until the status menu has closed. Otherwise it resigns key afterwards.
+    recorder.performSelector_withObject_afterDelay_("orderFrontAndActivate:", None, 0.15)
 
 
 class _ShortcutWindow(NSWindow):
@@ -47,25 +58,57 @@ class _ShortcutWindow(NSWindow):
             return None
         self._callback = callback
         self._done = False
+        self._monitor = None
+        self._previous_policy = None
         self.setTitle_("Change TexGrab shortcut")
         self.setLevel_(NSFloatingWindowLevel)
+        self.setHidesOnDeactivate_(False)
+        self.setCollectionBehavior_(NSWindowCollectionBehaviorMoveToActiveSpace)
         self.setDelegate_(self)
         content = self.contentView()
         self._status = NSTextField.wrappingLabelWithString_(
             f"Press the new shortcut. Current: {current_label}. Escape cancels."
         )
         self._status.setFrame_(((20, 36), (400, 64)))
+        self._status.setEditable_(False)
+        self._status.setSelectable_(False)
+        self._status.setRefusesFirstResponder_(True)
         content.addSubview_(self._status)
         return self
 
     def canBecomeKeyWindow(self) -> bool:
         return True
 
+    def canBecomeMainWindow(self) -> bool:
+        return True
+
+    def orderFrontAndActivate_(self, _sender) -> None:
+        if self._done:
+            return
+        app = NSApplication.sharedApplication()
+        self._previous_policy = app.activationPolicy()
+        app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        self.center()
+        self.makeKeyAndOrderFront_(None)
+        self.makeFirstResponder_(self)
+        app.activateIgnoringOtherApps_(True)
+        activate = getattr(app, "activate", None)
+        if activate is not None:
+            activate()
+
+        def handler(event):
+            self._handle(event)
+            return None
+
+        self._key_handler = handler
+        self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+            NSEventMaskKeyDown, handler
+        )
+
     def keyDown_(self, event) -> None:
         self._handle(event)
 
     def performKeyEquivalent_(self, event) -> bool:
-        # Command combinations are delivered here, not to keyDown:.
         self._handle(event)
         return True
 
@@ -83,7 +126,7 @@ class _ShortcutWindow(NSWindow):
             self._finish(None)
             return
         except ShortcutRejected as exc:
-            self._status.setStringValue_(exc.reason)
+            self._status.setStringValue_(str(exc.reason) + " Escape cancels.")
             return
         self._finish(choice)
 
@@ -92,6 +135,11 @@ class _ShortcutWindow(NSWindow):
         if self._done:
             return
         self._done = True
+        if self._monitor is not None:
+            NSEvent.removeMonitor_(self._monitor)
+            self._monitor = None
         callback = self._callback
         self.orderOut_(None)
+        if self._previous_policy is not None:
+            NSApplication.sharedApplication().setActivationPolicy_(self._previous_policy)
         callback(choice)
