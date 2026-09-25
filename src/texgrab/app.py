@@ -12,7 +12,7 @@ from texgrab.capture.region import grab_region
 from texgrab.clipboard import write_text
 from texgrab.config import Config, save_config
 from texgrab.hotkey.carbon import HotKeyManager
-from texgrab.hotkey.combo import apply_shortcut
+from texgrab.hotkey.combo import ShortcutChoice, apply_shortcut
 from texgrab.hotkey.recorder import prompt_for_shortcut
 from texgrab.log import get_logger, set_debug
 from texgrab.mainthread import call_on_main, call_on_main_sync
@@ -46,6 +46,9 @@ class TexGrabApp(rumps.App):
         self.shortcut_change_item = rumps.MenuItem(
             "Change shortcut…", callback=self._change_shortcut
         )
+        self.reset_shortcut_item = rumps.MenuItem(
+            "Reset shortcut to ⌘⌃⇧S", callback=self._reset_shortcut
+        )
         self._recording_shortcut = False
         self.test_item = rumps.MenuItem("Test OCR", callback=self._test_ocr)
         self.quit_item = rumps.MenuItem("Quit", callback=self._quit)
@@ -56,7 +59,12 @@ class TexGrabApp(rumps.App):
             self.test_item,
             [
                 rumps.MenuItem("Preferences"),
-                [self.notify_item, self.debug_item, self.shortcut_change_item],
+                [
+                    self.notify_item,
+                    self.debug_item,
+                    self.shortcut_change_item,
+                    self.reset_shortcut_item,
+                ],
             ],
             None,
             self.quit_item,
@@ -161,6 +169,11 @@ class TexGrabApp(rumps.App):
         set_debug(self.config.debug)
         get_logger().info("debug=%s", self.config.debug)
 
+    def _reset_shortcut(self, _sender) -> None:
+        if self._recording_shortcut:
+            return
+        self._install_shortcut(ShortcutChoice("s", True, True, True, False))
+
     def _change_shortcut(self, _sender) -> None:
         if self._recording_shortcut:
             return
@@ -178,6 +191,9 @@ class TexGrabApp(rumps.App):
             self._reregister_shortcut()
             get_logger().info("shortcut change cancelled")
             return
+        self._install_shortcut(choice)
+
+    def _install_shortcut(self, choice) -> None:
         previous = self._shortcut_snapshot()
         apply_shortcut(self.config, choice)
         if not self._reregister_shortcut():

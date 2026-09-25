@@ -9,6 +9,7 @@ from texgrab.hotkey.combo import (
     ShortcutRejected,
     apply_shortcut,
     choice_from_keycode,
+    modifier_state,
 )
 from texgrab.hotkey.keys import (
     CMD_KEY,
@@ -84,6 +85,29 @@ def test_unknown_keycode_is_rejected():
         assert "letter" in exc.reason
         return
     raise AssertionError("expected ShortcutRejected")
+
+
+def test_command_control_shift_s_is_accepted():
+    choice = choice_from_keycode(0x01, NS_COMMAND | NS_CONTROL | NS_SHIFT)
+    config = Config()
+    apply_shortcut(config, choice)
+    assert config.shortcut_label == "⌘⌃⇧S"
+    assert config.shortcut_shift is True
+
+
+def test_device_dependent_shift_still_counts():
+    # Left command, left control, and left shift with only the hardware bits set.
+    command, control, shift, option = modifier_state(0x8 | 0x1 | 0x2)
+    assert (command, control, shift, option) == (True, True, True, False)
+    choice = choice_from_keycode(0x01, 0x8 | 0x1 | 0x2)
+    assert choice.shift is True
+    assert choice.key == "s"
+
+
+def test_character_fallback_when_keycode_is_unknown():
+    choice = choice_from_keycode(0x99, NS_COMMAND | NS_SHIFT, "s")
+    assert choice.key == "s"
+    assert choice.shift is True
 
 
 def test_escape_cancels():

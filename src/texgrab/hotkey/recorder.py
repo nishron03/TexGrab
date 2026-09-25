@@ -14,9 +14,13 @@ from AppKit import (
     NSApplicationActivationPolicyRegular,
     NSBackingStoreBuffered,
     NSEvent,
+    NSEventMaskFlagsChanged,
     NSEventMaskKeyDown,
+    NSEventTypeFlagsChanged,
+    NSEventTypeKeyDown,
     NSFloatingWindowLevel,
     NSTextField,
+    NSView,
     NSWindow,
     NSWindowCollectionBehaviorMoveToActiveSpace,
     NSWindowStyleMaskClosable,
@@ -24,7 +28,32 @@ from AppKit import (
 )
 from Foundation import NSMakeRect
 
-from texgrab.hotkey.combo import ShortcutCancelled, ShortcutRejected, choice_from_keycode
+from texgrab.hotkey.combo import (
+    ShortcutCancelled,
+    ShortcutRejected,
+    choice_from_keycode,
+    modifier_state,
+)
+from texgrab.log import get_logger
+
+
+def _physical_keycode(event) -> int:
+    try:
+        cg_event = event.CGEvent()
+        if cg_event is not None:
+            return int(cg_event.getIntegerValueField_(9))
+    except Exception:
+        pass
+    return int(event.keyCode())
+
+
+def _characters_ignoring_modifiers(event) -> str:
+    try:
+        text = event.charactersIgnoringModifiers()
+    except Exception:
+        return ""
+    return "" if text is None else str(text)
+
 
 _active = None
 
@@ -42,6 +71,23 @@ def prompt_for_shortcut(current_label: str, callback) -> None:
     _active = recorder
     # Wait until the status menu has closed. Otherwise it resigns key afterwards.
     recorder.performSelector_withObject_afterDelay_("orderFrontAndActivate:", None, 0.15)
+
+
+class _CaptureView(NSView):
+    """First responder. Command chords call performKeyEquivalent:; Command+Control+Shift arrives as keyDown:."""
+
+    def acceptsFirstResponder(self) -> bool:
+        return True
+
+    def keyDown_(self, event) -> None:
+        self.window()._handle(event)
+
+    def performKeyEquivalent_(self, event) -> bool:
+        self.window()._handle(event)
+        return True
+
+    def flagsChanged_(self, event) -> None:
+        self.window()._show_modifiers(event)
 
 
 class _ShortcutWindow(NSWindow):
@@ -74,6 +120,8 @@ class _ShortcutWindow(NSWindow):
         self._status.setSelectable_(False)
         self._status.setRefusesFirstResponder_(True)
         content.addSubview_(self._status)
+        self._capture = _CaptureView.alloc().initWithFrame_(NSMakeRect(0, 0, 440, 130))
+        content.addSubview_(self._capture)
         return self
 
     def canBecomeKeyWindow(self) -> bool:
@@ -90,20 +138,31 @@ class _ShortcutWindow(NSWindow):
         app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
         self.center()
         self.makeKeyAndOrderFront_(None)
-        self.makeFirstResponder_(self)
+        self.makeFirstResponder_(self._capture)
         app.activateIgnoringOtherApps_(True)
         activate = getattr(app, "activate", None)
         if activate is not None:
             activate()
 
         def handler(event):
+            if event.type() == NSEventTypeFlagsChanged:
+                self._show_modifiers(event)
+                return event
             self._handle(event)
             return None
 
         self._key_handler = handler
         self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
-            NSEventMaskKeyDown, handler
+            NSEventMaskKeyDown | NSEventMaskFlagsChanged, handler
         )
+
+    def sendEvent_(self, event) -> None:
+        if event.type() == NSEventTypeKeyDown:
+            self._handle(event)
+            return
+        if event.type() == NSEventTypeFlagsChanged:
+            self._show_modifiers(event)
+        NSWindow.sendEvent_(self, event)
 
     def keyDown_(self, event) -> None:
         self._handle(event)
@@ -120,8 +179,17 @@ class _ShortcutWindow(NSWindow):
     def _handle(self, event) -> None:
         if self._done or event.isARepeat():
             return
+        key_code = _physical_keycode(event)
+        flags = int(event.modifierFlags())
+        characters = _characters_ignoring_modifiers(event)
+        get_logger().info(
+            "shortcut key code=%s flags=%s characters=%r",
+            key_code,
+            hex(flags),
+            characters,
+        )
         try:
-            choice = choice_from_keycode(event.keyCode(), int(event.modifierFlags()))
+            choice = choice_from_keycode(key_code, flags, characters)
         except ShortcutCancelled:
             self._finish(None)
             return
@@ -129,6 +197,25 @@ class _ShortcutWindow(NSWindow):
             self._status.setStringValue_(str(exc.reason) + " Escape cancels.")
             return
         self._finish(choice)
+
+    @objc.python_method
+    def _show_modifiers(self, event) -> None:
+        if self._done:
+            return
+        command, control, shift, option = modifier_state(int(event.modifierFlags()))
+        symbols = []
+        if command:
+            symbols.append("⌘")
+        if control:
+            symbols.append("⌃")
+        if option:
+            symbols.append("⌥")
+        if shift:
+            symbols.append("⇧")
+        held = "".join(symbols) if symbols else "no modifiers"
+        self._status.setStringValue_(
+            f"Holding {held}. Press a letter, digit, or punctuation key. Escape cancels."
+        )
 
     @objc.python_method
     def _finish(self, choice) -> None:

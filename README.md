@@ -139,7 +139,7 @@ While a snip is running the menu-bar title becomes **TexGrab…**. A second shor
 
 The default is **⌘⌃⇧S** (Command, Control, Shift, S). It was chosen because it is not ⌘⇧3, ⌘⇧4, or ⌘⇧5.
 
-To change it while TexGrab is running, open the menu and choose **Preferences → Change shortcut…**. A small window asks for the new combination. Press the keys (⌘ or ⌃ is required, so the shortcut cannot swallow ordinary typing). Escape cancels. The menu label updates immediately and the choice is saved, so it is still there after a restart.
+To change it while TexGrab is running, open the menu and choose **Preferences → Change shortcut…**. A small window asks for the new combination. Press the keys. **⌘ or ⌃ is required**, and **⇧ and ⌥ can be added** — ⌘⌃⇧S is allowed and is still the default. The window shows the modifiers you are holding. Escape cancels. **Preferences → Reset shortcut to ⌘⌃⇧S** puts the original combination back without recording. The menu label updates immediately and the choice is saved, so it is still there after a restart.
 
 You can also edit `~/Library/Application Support/TexGrab/config.json` and relaunch:
 

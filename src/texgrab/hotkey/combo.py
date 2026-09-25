@@ -14,6 +14,16 @@ NS_SHIFT = 1 << 17
 NS_CONTROL = 1 << 18
 NS_OPTION = 1 << 19
 NS_COMMAND = 1 << 20
+# Device-dependent bits. AppKit usually sets the bits above as well, but a
+# shifted chord can arrive with only these set.
+_LEFT_CONTROL = 0x00000001
+_LEFT_SHIFT = 0x00000002
+_RIGHT_SHIFT = 0x00000004
+_LEFT_COMMAND = 0x00000008
+_RIGHT_COMMAND = 0x00000010
+_LEFT_OPTION = 0x00000020
+_RIGHT_OPTION = 0x00000040
+_RIGHT_CONTROL = 0x00002000
 ESCAPE_KEYCODE = 0x35
 
 
@@ -36,18 +46,32 @@ class ShortcutChoice:
     option: bool
 
 
-def choice_from_keycode(key_code: int, modifier_flags: int) -> ShortcutChoice:
+def modifier_state(modifier_flags: int) -> tuple[bool, bool, bool, bool]:
+    """Return command, control, shift, option."""
+    command = bool(modifier_flags & (NS_COMMAND | _LEFT_COMMAND | _RIGHT_COMMAND))
+    control = bool(modifier_flags & (NS_CONTROL | _LEFT_CONTROL | _RIGHT_CONTROL))
+    shift = bool(modifier_flags & (NS_SHIFT | _LEFT_SHIFT | _RIGHT_SHIFT))
+    option = bool(modifier_flags & (NS_OPTION | _LEFT_OPTION | _RIGHT_OPTION))
+    return command, control, shift, option
+
+
+def choice_from_keycode(
+    key_code: int,
+    modifier_flags: int,
+    characters: str | None = None,
+) -> ShortcutChoice:
     if key_code == ESCAPE_KEYCODE:
         raise ShortcutCancelled()
     name = name_for_keycode(key_code)
+    if name is None and characters:
+        text = characters.lower()
+        if len(text) == 1 and name_for_keycode_safe(text):
+            name = text
     if name is None:
         raise ShortcutRejected("Use a letter, digit, or punctuation key.")
-    command = bool(modifier_flags & NS_COMMAND)
-    control = bool(modifier_flags & NS_CONTROL)
-    shift = bool(modifier_flags & NS_SHIFT)
-    option = bool(modifier_flags & NS_OPTION)
+    command, control, shift, option = modifier_state(modifier_flags)
     if not (command or control):
-        raise ShortcutRejected("Include ⌘ or ⌃ so the shortcut does not block normal typing.")
+        raise ShortcutRejected("Include ⌘ or ⌃. Shift and ⌥ can be added on top.")
     return ShortcutChoice(
         key=name,
         command=command,
@@ -55,6 +79,16 @@ def choice_from_keycode(key_code: int, modifier_flags: int) -> ShortcutChoice:
         shift=shift,
         option=option,
     )
+
+
+def name_for_keycode_safe(key: str) -> bool:
+    from texgrab.hotkey.keys import keycode_for
+
+    try:
+        keycode_for(key)
+    except ValueError:
+        return False
+    return True
 
 
 def apply_shortcut(config, choice: ShortcutChoice) -> None:
