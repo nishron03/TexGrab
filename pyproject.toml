@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "texgrab"
+version = "0.1.0"
+description = "Menu-bar utility that turns a selected equation into LaTeX on the clipboard."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+[project.scripts]
+texgrab = "texgrab.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+texgrab = ["resources/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: loads the local pix2tex model and runs inference",
+]
