@@ -2,11 +2,44 @@
 
 ## Current Status
 
-TexGrab is not running. On branch `custom-hotkey` (baseline is `main`), Preferences → Change shortcut… records a new global hotkey and registers it immediately. The default remains ⌘⌃⇧S. A chord must include ⌘ or ⌃. Fenced matrices are still scaled and recognized with the single-line resizer off.
+Linux port on branch `linux` (from `main`). TexGrab is not running. The GNOME custom shortcut was removed on quit (`custom-keybindings` is `@as []`). No `texgrab.sock` is left.
 
-## Architecture
+Session on this machine, 2026-09-29:
 
-Menu-bar app (`rumps`) on Python 3.11.16 in conda env `latex-snipper` (`/opt/anaconda3/envs/latex-snipper`). Project root: `/Users/nishron/PetProjects/TexGrab`.
+- `uname -a`: Linux Wintermute 6.17.0-1032-oem #32-Ubuntu SMP PREEMPT_DYNAMIC Fri Jul 24 05:46:26 UTC 2026 x86_64 GNU/Linux
+- `XDG_SESSION_TYPE=wayland`
+- `XDG_CURRENT_DESKTOP=ubuntu:GNOME`
+- `DESKTOP_SESSION=ubuntu`
+- `XDG_RUNTIME_DIR=/run/user/1000`
+- `XDG_CONFIG_HOME` and `XDG_STATE_HOME` unset (defaults `~/.config` and `~/.local/state`)
+- conda 26.1.1, base `/home/nish/miniconda3`
+- Present: `notify-send`, `gsettings`, `busctl`
+- Absent on the system PATH at the start: `wl-copy`, `wl-paste`, `xclip`, `xsel`, `grim`, `slurp`, `spectacle`, `gnome-screenshot`, `maim`
+- Screenshot portal is present. `org.freedesktop.portal.GlobalShortcuts` is not.
+- GNOME screenshot chords, left alone: `show-screenshot-ui=['Print']`, `screenshot=['<Shift>Print']`, `screenshot-window=['<Alt>Print']`. Ctrl+Alt+Shift+S was free and is the default.
+
+## Linux bindings
+
+- Wayland, and GlobalShortcuts missing: one GNOME custom keybinding named TexGrab, command `<conda>/bin/python3.11 -m texgrab --trigger`, binding `<Control><Alt><Shift>s`. Other custom shortcuts are kept. Quit removes only the TexGrab path. gsettings is `/usr/bin/gsettings`. The conda glib `gsettings` writes a keyfile GNOME Shell does not read.
+- X11 (`XDG_SESSION_TYPE=x11` only): in-process `XGrabKey`. Not used on this Wayland session.
+- GlobalShortcuts portal is implemented and was tried. Bind failed because the interface is absent. The socket `$XDG_RUNTIME_DIR/texgrab.sock` is always listening. `texgrab --trigger` sends `snip`.
+- Sway and Hyprland print a bind line and do not edit the user's config. KDE writes one kglobalaccel entry. Neither was run here.
+- Capture order: portal Screenshot, then grim/slurp, spectacle, gnome-screenshot, maim. This machine used the portal.
+- Clipboard: GNU wl-clipboard 2.2.1 (`wl-copy` / `wl-paste`), installed by `scripts/install_linux_clipboard.sh` into the env bin. conda-forge `wl-clipboard-rs` 0.9.4 cannot speak to this compositor.
+
+## Torch
+
+`torch==2.14.0+cpu`, `torchvision==0.29.0+cpu`, `pix2tex==0.1.4`, Python 3.11.16. `torch.cuda.is_available()` is false. The PyPI `torch==2.14.0` manylinux wheel depends on CUDA 13, so the CPU index `https://download.pytorch.org/whl/cpu` is used. Recorded in `requirements-linux.lock.txt`.
+
+## Manual steps actually run
+
+See `tests/MANUAL-linux.md`. Passed: startup reaches `status Ready`; quit removes the shortcut, the socket, and the process; a second `./scripts/run.sh` exits as already running. `python -m texgrab --trigger` logged `shortcut activated` and `capture start backend=portal` and did not change the clipboard. The overlay, Escape, a real snip, Print, the Test OCR menu item, and the shortcut recorder were not driven. Those steps are not passed.
+
+`pytest`: 56 passed, 2 skipped (the Mac pasteboard and screencapture modules). `--test-ocr` on `sample_equation.png` printed `E=m C^{2}+\int_{0}^{1}\!X^{2}\,Q X`. With `--clipboard`, `wl-paste -n -t text/plain` printed that same line only.
+
+## Mac architecture (unchanged)
+
+Menu-bar app (`rumps`) on Python 3.11.16 in conda env `latex-snipper`. The Mac tree still uses Carbon, `screencapture` without `-c`, NSPasteboard, and `osascript`. Darwin config and logs stay under `~/Library`. A Mac `conda env create -f environment.yml` still installs `requirements.txt` (common + macOS pins).
 
 - Global shortcut: Carbon `RegisterEventHotKey` for ⌘⌃⇧S (`kVK_ANSI_S` = 0x01, modifiers command `1<<8`, shift `1<<9`, control `1<<12`). No Accessibility permission. The callback returns immediately and starts a worker.
 - Capture: `screencapture -i -x -t png <private temp file>`. No `-c`. The file is deleted before OCR. Cancel (no file, no stderr) is silent. A non-zero exit with stderr raises `CaptureError`.
@@ -33,7 +66,7 @@ Python 3.14 (Homebrew) is unused. pix2tex 0.1.4 is installed with the pins in `r
 
 ## In Progress
 
-Nothing is mid-implementation. The remaining check is the manual pass in `tests/MANUAL.md`: press ⌘⌃⇧S from another app, drag a rectangle, paste LaTeX, and confirm an ordinary ⌘⇧4 screenshot is untouched.
+The Linux steps that still need a person are in `tests/MANUAL-linux.md`: the region overlay, Escape, a real snip, Print, the tray Test OCR item, and the shortcut recorder. The Mac pass in `tests/MANUAL.md` was not re-run on this machine.
 
 ## Known Issues
 
