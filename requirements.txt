@@ -1,11 +1,5 @@
-# Direct dependencies, pinned to the set that ran pix2tex on this machine.
-# The full resolved set is requirements.lock.txt.
-# Install inside the latex-snipper conda env only.
-torch==2.14.0
-torchvision==0.29.0
-pix2tex==0.1.4
-rumps==0.4.0
-pyobjc-framework-Cocoa==12.2.2
-pyobjc-framework-Quartz==12.2.2
-pytest==9.1.1
-Pillow==12.3.0
+# Mac install. environment.yml pip-installs this file.
+# Linux uses environment-linux.yml and must not install this file:
+# rumps and PyObjC are in requirements-macos.txt.
+-r requirements-common.txt
+-r requirements-macos.txt

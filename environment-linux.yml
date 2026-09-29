@@ -1,0 +1,15 @@
+name: latex-snipper
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pygobject
+  - gtk3
+  # GNOME does not implement wlr-data-control, so the conda-forge
+  # wl-clipboard-rs package cannot copy. scripts/run.sh installs GNU
+  # wl-clipboard (wl-copy and wl-paste) with scripts/install_linux_clipboard.sh.
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - -r requirements-common.txt
+      - -r requirements-linux.txt

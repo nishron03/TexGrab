@@ -5,4 +5,5 @@ dependencies:
   - python=3.11
   - pip
   - pip:
+      # requirements.txt is common + macOS. On Linux use environment-linux.yml.
       - -r requirements.txt

@@ -1,0 +1,4 @@
+# Mac menu-bar stack. Do not install these on Linux.
+rumps==0.4.0
+pyobjc-framework-Cocoa==12.2.2
+pyobjc-framework-Quartz==12.2.2
