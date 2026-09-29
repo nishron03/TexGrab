@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOG_DIR = Path.home() / "Library" / "Logs" / "TexGrab"
-LOG_PATH = LOG_DIR / "texgrab.log"
-
 _configured = False
+
+
+def log_dir() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / "TexGrab"
+    raw = os.environ.get("XDG_STATE_HOME", "").strip()
+    base = Path(raw).expanduser() if raw else Path.home() / ".local" / "state"
+    return base / "texgrab"
+
+
+def log_path() -> Path:
+    return log_dir() / "texgrab.log"
 
 
 def get_logger() -> logging.Logger:
@@ -25,12 +35,13 @@ def configure_logging(debug: bool) -> logging.Logger:
     logger.propagate = False
     if _configured:
         return logger
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    directory = log_dir()
+    directory.mkdir(parents=True, exist_ok=True)
     formatter = logging.Formatter(
         "%(asctime)s %(levelname)s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler = RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=3)
+    file_handler = RotatingFileHandler(log_path(), maxBytes=1_000_000, backupCount=3)
     file_handler.setFormatter(formatter)
     stream = logging.StreamHandler(sys.stderr)
     stream.setFormatter(formatter)

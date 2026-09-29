@@ -6,6 +6,7 @@ Shift+S alone would stop capital S from reaching other apps.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 from texgrab.hotkey.keys import name_for_keycode
@@ -97,3 +98,44 @@ def apply_shortcut(config, choice: ShortcutChoice) -> None:
     config.shortcut_control = choice.control
     config.shortcut_shift = choice.shift
     config.shortcut_option = choice.option
+
+
+def default_choice() -> ShortcutChoice:
+    """Platform default. Linux is Ctrl+Alt+Shift+S. Mac is ⌘⌃⇧S."""
+    if sys.platform == "darwin":
+        return ShortcutChoice("s", True, True, True, False)
+    return ShortcutChoice("s", False, True, True, True)
+
+
+def choice_from_held(
+    key: str,
+    *,
+    command: bool,
+    control: bool,
+    shift: bool,
+    option: bool,
+    escape: bool = False,
+) -> ShortcutChoice:
+    """Accept a chord described by modifiers the recorder already decoded.
+
+    `command` is Super on Linux and Command on Mac. `option` is Alt on Linux.
+    Escape cancels. A bare letter, or Alt+Shift with no Ctrl or Super, is rejected.
+    """
+    if escape or key.strip().lower() in {"escape", "esc"}:
+        raise ShortcutCancelled()
+    cleaned = key.strip().lower()
+    if not name_for_keycode_safe(cleaned):
+        raise ShortcutRejected("Use a letter, digit, or punctuation key.")
+    if not (command or control):
+        if sys.platform == "darwin":
+            reason = "Include ⌘ or ⌃. Shift and ⌥ can be added on top."
+        else:
+            reason = "Include Ctrl or Super. Alt and Shift can be added on top."
+        raise ShortcutRejected(reason)
+    return ShortcutChoice(
+        key=cleaned,
+        command=command,
+        control=control,
+        shift=shift,
+        option=option,
+    )
