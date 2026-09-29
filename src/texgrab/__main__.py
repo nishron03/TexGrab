@@ -16,14 +16,22 @@ from texgrab.pipeline import run_image
 
 
 def _check() -> int:
-    print(f"python={sys.version.split()[0]}")
+    version = sys.version.split()[0]
+    print(f"python={version}")
     print(f"prefix={sys.prefix}")
     print(f"executable={sys.executable}")
     print(f"texgrab={__version__}")
-    if "latex-snipper" not in Path(sys.prefix).name:
+    ok = True
+    if Path(sys.prefix).name != "latex-snipper":
         print("warning=not running inside the latex-snipper conda env", file=sys.stderr)
-        return 1
-    return 0
+        ok = False
+    if not version.startswith("3.11"):
+        print("warning=Python 3.11 is required", file=sys.stderr)
+        ok = False
+    if __version__ != "0.1.0":
+        print("warning=texgrab 0.1.0 is required", file=sys.stderr)
+        ok = False
+    return 0 if ok else 1
 
 
 def _test_ocr(path_str: str, use_clipboard: bool) -> int:
@@ -57,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="With --test-ocr, copy the LaTeX string to the clipboard",
     )
+    parser.add_argument(
+        "--trigger",
+        action="store_true",
+        help="Ask the running TexGrab to snip, starting it if it is not running",
+    )
     args = parser.parse_args(argv)
     if args.check:
         return _check()
@@ -64,9 +77,24 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(config.debug)
     if args.test_ocr:
         return _test_ocr(args.test_ocr, args.clipboard)
-    from texgrab.app import run_app
+    if sys.platform == "darwin":
+        if args.trigger:
+            print("--trigger is only available on Linux", file=sys.stderr)
+            return 2
+        from texgrab.app import run_app
 
-    run_app(config)
+        run_app(config)
+        return 0
+    from texgrab.linux.trigger import send_snip
+
+    if args.trigger and send_snip():
+        get_logger().info("trigger sent")
+        return 0
+    if args.trigger:
+        get_logger().info("no listener; starting TexGrab")
+    from texgrab.linux.app import run_app
+
+    run_app(config, snip_when_ready=bool(args.trigger))
     return 0
 
 

@@ -1,3 +1,5 @@
+import sys
+
 from texgrab.config import Config
 from texgrab.hotkey.combo import (
     ESCAPE_KEYCODE,
@@ -23,14 +25,19 @@ from texgrab.hotkey.keys import (
 
 def test_default_shortcut_is_command_control_shift_s():
     config = Config()
-    assert config.shortcut_label == "⌘⌃⇧S"
     assert keycode_for(config.shortcut_key) == 0x01
-    assert modifier_mask(
-        command=config.shortcut_command,
-        control=config.shortcut_control,
-        shift=config.shortcut_shift,
-        option=config.shortcut_option,
-    ) == (CMD_KEY | CONTROL_KEY | SHIFT_KEY)
+    if sys.platform == "darwin":
+        assert config.shortcut_label == "⌘⌃⇧S"
+        assert modifier_mask(
+            command=config.shortcut_command,
+            control=config.shortcut_control,
+            shift=config.shortcut_shift,
+            option=config.shortcut_option,
+        ) == (CMD_KEY | CONTROL_KEY | SHIFT_KEY)
+    else:
+        assert config.shortcut_label == "Ctrl+Alt+Shift+S"
+        assert config.shortcut_command is False
+        assert config.shortcut_option is True
 
 
 def test_unknown_key_is_rejected():
@@ -51,14 +58,20 @@ def test_recorded_default_chord():
     assert (choice.command, choice.control, choice.shift, choice.option) == (True, True, True, False)
     config = Config()
     apply_shortcut(config, choice)
-    assert config.shortcut_label == "⌘⌃⇧S"
+    if sys.platform == "darwin":
+        assert config.shortcut_label == "⌘⌃⇧S"
+    else:
+        assert config.shortcut_label == "Super+Ctrl+Shift+S"
 
 
 def test_command_letter_is_accepted():
     choice = choice_from_keycode(keycode_for("e"), NS_COMMAND)
     config = Config()
     apply_shortcut(config, choice)
-    assert config.shortcut_label == "⌘E"
+    if sys.platform == "darwin":
+        assert config.shortcut_label == "⌘E"
+    else:
+        assert config.shortcut_label == "Super+E"
 
 
 def test_shift_alone_is_rejected():
@@ -91,7 +104,10 @@ def test_command_control_shift_s_is_accepted():
     choice = choice_from_keycode(0x01, NS_COMMAND | NS_CONTROL | NS_SHIFT)
     config = Config()
     apply_shortcut(config, choice)
-    assert config.shortcut_label == "⌘⌃⇧S"
+    if sys.platform == "darwin":
+        assert config.shortcut_label == "⌘⌃⇧S"
+    else:
+        assert config.shortcut_label == "Super+Ctrl+Shift+S"
     assert config.shortcut_shift is True
 
 
