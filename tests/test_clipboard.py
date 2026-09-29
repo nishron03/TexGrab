@@ -1,3 +1,10 @@
+import sys
+
+import pytest
+
+if sys.platform != "darwin":
+    pytest.skip("AppKit pasteboard tests run on macOS", allow_module_level=True)
+
 from AppKit import NSPasteboard, NSPasteboardItem
 
 from texgrab.clipboard import change_count, read_text, write_text

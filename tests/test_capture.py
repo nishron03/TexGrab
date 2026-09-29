@@ -1,3 +1,10 @@
+import sys
+
+import pytest
+
+if sys.platform != "darwin":
+    pytest.skip("screencapture tests run on macOS", allow_module_level=True)
+
 import subprocess
 from pathlib import Path
 

@@ -1,6 +1,8 @@
-"""Write a string to the general pasteboard and nothing else."""
+"""Write a string to the clipboard and nothing else."""
 
 from __future__ import annotations
+
+import sys
 
 from texgrab.log import get_logger
 
@@ -18,6 +20,10 @@ def _pasteboard():
 
 
 def read_text() -> str:
+    if sys.platform != "darwin":
+        from texgrab.linux.clipboard import read_text as impl
+
+        return impl()
     value = _pasteboard().stringForType_(PASTEBOARD_TYPE)
     if value is None:
         return ""
@@ -25,10 +31,19 @@ def read_text() -> str:
 
 
 def change_count() -> int:
+    if sys.platform != "darwin":
+        from texgrab.linux.clipboard import change_count as impl
+
+        return impl()
     return int(_pasteboard().changeCount())
 
 
 def write_text(text: str) -> None:
+    if sys.platform != "darwin":
+        from texgrab.linux.clipboard import write_text as impl
+
+        impl(text)
+        return
     if not isinstance(text, str):
         raise ClipboardError("clipboard text must be a string")
     pasteboard = _pasteboard()
