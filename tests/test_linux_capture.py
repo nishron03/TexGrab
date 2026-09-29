@@ -112,6 +112,60 @@ def test_portal_permission_raises_and_deletes_temp_dir(tmp_path, monkeypatch):
     assert not Path(created["dir"]).exists()
 
 
+def test_portal_denied_without_text_asks_for_permission(tmp_path, monkeypatch):
+    created = {}
+    _patch_temp(monkeypatch, tmp_path, created)
+
+    class Portal:
+        def capture(self):
+            return PortalShot(2, {})
+
+    with pytest.raises(CapturePermissionError):
+        grab_region(backend="portal", portal=Portal(), select=lambda _image: _image)
+    assert not Path(created["dir"]).exists()
+
+
+def test_portal_selector_cancel_is_silent(tmp_path, monkeypatch):
+    source = tmp_path / "portal.png"
+    _png(source, size=(5, 2), color=(9, 8, 7))
+    created = {}
+    _patch_temp(monkeypatch, tmp_path, created)
+
+    class Portal:
+        def capture(self):
+            return PortalShot(0, {"uri": source.as_uri()})
+
+    assert grab_region(backend="portal", portal=Portal(), select=lambda _image: None) is None
+    assert not source.exists()
+    assert not Path(created["dir"]).exists()
+
+
+def test_command_backend_skips_the_overlay(tmp_path, monkeypatch):
+    created = {}
+    _patch_temp(monkeypatch, tmp_path, created)
+
+    def runner(command):
+        _png(command[-1])
+        return subprocess.CompletedProcess(command, 0, stderr=b"")
+
+    def choose(_image):
+        raise AssertionError("overlay")
+
+    image = grab_region(runner=runner, backend="gnome-screenshot", select=choose)
+    assert image is not None
+    assert image.size == (4, 3)
+
+
+def test_portal_response_rule_does_not_match_the_well_known_name():
+    from texgrab.linux.portal import response_rule
+
+    rule = response_rule("/org/freedesktop/portal/desktop/request/1_2/shotabc")
+    assert "sender" not in rule.header_fields
+    assert rule.header_fields["path"].endswith("/shotabc")
+    assert rule.header_fields["member"] == "Response"
+    assert rule.header_fields["interface"] == "org.freedesktop.portal.Request"
+
+
 def test_portal_file_uri_is_copied_and_removed(tmp_path, monkeypatch):
     source = tmp_path / "portal.png"
     _png(source, size=(5, 2), color=(9, 8, 7))
@@ -122,8 +176,12 @@ def test_portal_file_uri_is_copied_and_removed(tmp_path, monkeypatch):
         def capture(self):
             return PortalShot(0, {"uri": source.as_uri()})
 
-    image = grab_region(backend="portal", portal=Portal())
+    def choose(image):
+        assert image.size == (5, 2)
+        return image.crop((0, 0, 2, 1))
+
+    image = grab_region(backend="portal", portal=Portal(), select=choose)
     assert image is not None
-    assert image.size == (5, 2)
+    assert image.size == (2, 1)
     assert not source.exists()
     assert not Path(created["dir"]).exists()

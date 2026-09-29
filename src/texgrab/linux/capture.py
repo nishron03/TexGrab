@@ -1,7 +1,10 @@
 """Region capture. The first working backend is used. Nothing is copied.
 
-Order: xdg-desktop-portal Screenshot, grim/slurp, spectacle, gnome-screenshot, maim.
-A private temp PNG (directory mode 0700) is deleted before the image is returned.
+On a portal session the desktop screenshot tool is not the selector. A full
+frame is taken, then a drag overlay crops it: release keeps the rectangle and
+Escape cancels. grim/slurp, spectacle, gnome-screenshot, and maim remain
+fallbacks where those tools exist. A private temp PNG (directory mode 0700)
+is deleted before the image is returned.
 """
 
 from __future__ import annotations
@@ -69,8 +72,12 @@ def select_backend(probe_portal, which) -> str:
     raise CaptureError("no screen capture tool is available")
 
 
-def grab_region(runner=None, backend=None, portal=None) -> Image.Image | None:
-    """Return the selected image, or None if the user cancelled."""
+def grab_region(runner=None, backend=None, portal=None, select=None) -> Image.Image | None:
+    """Return the selected image, or None if the user cancelled.
+
+    `select`, when set, crops a portal frame. The running app uses the drag
+    overlay. Tests pass their own callable so no window is opened.
+    """
     if backend is None:
         from texgrab.linux.portal import screenshot_available
 
@@ -97,6 +104,16 @@ def grab_region(runner=None, backend=None, portal=None) -> Image.Image | None:
         with Image.open(path) as image:
             image.load()
             copied = image.copy()
+        if backend == "portal":
+            get_logger().info("capture frame %sx%s", copied.width, copied.height)
+            chooser = _overlay_select if select is None else select
+            chosen = chooser(copied)
+            if chosen is None:
+                get_logger().info("capture cancelled")
+                return None
+            if chosen.mode != "RGB":
+                chosen = chosen.convert("RGB")
+            copied = chosen
         get_logger().info("capture ok %sx%s", copied.width, copied.height)
         return copied
     finally:
@@ -168,6 +185,11 @@ def _fill_from_portal(path: Path, portal) -> None:
     get_logger().info("capture portal response=%s", shot.response)
     if _is_permission(shot.response, error):
         raise CapturePermissionError(error or "permission denied")
+    if shot.response == 2 and not uri:
+        get_logger().error("capture failed: %s", (error or "permission denied")[:500])
+        if error:
+            raise CaptureError(error[:500])
+        raise CapturePermissionError("permission denied")
     if shot.response != 0 or not uri:
         if error and shot.response not in (0, 1):
             get_logger().error("capture failed: %s", error[:500])
@@ -213,8 +235,14 @@ def _uri_to_path(uri: str) -> Path:
     return Path(urllib.parse.unquote(parsed.path))
 
 
+def _overlay_select(image: Image.Image):
+    from texgrab.linux.overlay import select_region
+
+    return select_region(image)
+
+
 class _LivePortal:
     def capture(self) -> PortalShot:
-        from texgrab.linux.portal import interactive_screenshot
+        from texgrab.linux.portal import capture_screenshot
 
-        return interactive_screenshot()
+        return capture_screenshot()

@@ -24,7 +24,7 @@ Session on this machine, 2026-09-29:
 - X11 (`XDG_SESSION_TYPE=x11` only): in-process `XGrabKey`. Not used on this Wayland session.
 - GlobalShortcuts portal is implemented and was tried. Bind failed because the interface is absent. The socket `$XDG_RUNTIME_DIR/texgrab.sock` is always listening. `texgrab --trigger` sends `snip`.
 - Sway and Hyprland print a bind line and do not edit the user's config. KDE writes one kglobalaccel entry. Neither was run here.
-- Capture order: portal Screenshot, then grim/slurp, spectacle, gnome-screenshot, maim. This machine used the portal.
+- Capture: a silent portal frame, then TexGrab's own drag overlay (release crops, Escape cancels). The GNOME screenshot UI is not the selector. grim/slurp, spectacle, gnome-screenshot, and maim stay as fallbacks and are absent here. The portal Response signal is matched without the well-known bus name, because that comparison dropped the reply and left the snip running.
 - Clipboard: GNU wl-clipboard 2.2.1 (`wl-copy` / `wl-paste`), installed by `scripts/install_linux_clipboard.sh` into the env bin. conda-forge `wl-clipboard-rs` 0.9.4 cannot speak to this compositor.
 
 ## Torch
@@ -33,7 +33,7 @@ Session on this machine, 2026-09-29:
 
 ## Manual steps actually run
 
-See `tests/MANUAL-linux.md`. Passed: startup reaches `status Ready`; quit removes the shortcut, the socket, and the process; a second `./scripts/run.sh` exits as already running. `python -m texgrab --trigger` logged `shortcut activated` and `capture start backend=portal` and did not change the clipboard. The overlay, Escape, a real snip, Print, the Test OCR menu item, and the shortcut recorder were not driven. Those steps are not passed.
+See `tests/MANUAL-linux.md`. Passed earlier: startup reaches `status Ready`; quit removes the shortcut, the socket, and the process; a second `./scripts/run.sh` exits as already running. On 2026-09-29 the user tried the GNOME screenshot UI: selecting a region did not finish the snip, Enter put the image on the clipboard, and Escape left `shortcut ignored; snip already running` (13:06:12). That UI is no longer the selector. A silent frame plus the drag overlay was checked from this session for size, Escape, a second selection, and an unchanged clipboard. A person has not yet dragged a real equation, pressed Print, used Test OCR, or changed the shortcut.
 
 `pytest`: 56 passed, 2 skipped (the Mac pasteboard and screencapture modules). `--test-ocr` on `sample_equation.png` printed `E=m C^{2}+\int_{0}^{1}\!X^{2}\,Q X`. With `--clipboard`, `wl-paste -n -t text/plain` printed that same line only.
 
@@ -66,7 +66,7 @@ Python 3.14 (Homebrew) is unused. pix2tex 0.1.4 is installed with the pins in `r
 
 ## In Progress
 
-The Linux steps that still need a person are in `tests/MANUAL-linux.md`: the region overlay, Escape, a real snip, Print, the tray Test OCR item, and the shortcut recorder. The Mac pass in `tests/MANUAL.md` was not re-run on this machine.
+The Linux steps that still need a person are in `tests/MANUAL-linux.md`: a real equation drag, Print, the tray Test OCR item, and the shortcut recorder. The Mac pass in `tests/MANUAL.md` was not re-run on this machine.
 
 ## Known Issues
 
@@ -101,3 +101,4 @@ The Linux steps that still need a person are in `tests/MANUAL-linux.md`: the reg
 - 2026-09-25: The recorder window opened but received no keys. A status-item app is not active, and the menu closing returns focus to the previous app. The recorder now waits until the menu has closed, switches to a regular activation policy, and listens with a local key monitor. Escape and the new chord are handled there. The previous activation policy is restored when the window closes.
 - 2026-09-25: Shift was never disallowed. ⌘D records because it is a Command key-equivalent. ⌘⌃⇧S is delivered as a normal keyDown, which the window was not receiving. The recorder now takes that path too, shows the modifiers being held, and Preferences has "Reset shortcut to ⌘⌃⇧S".
 - 2026-09-25: README rewritten around install and everyday use. `scripts/run.sh` looks up the `latex-snipper` env instead of assuming `/opt/anaconda3`. Published as a public GitHub repo.
+- 2026-09-29: The GNOME interactive screenshot UI left the snip running after Escape and copied an image on Enter. Capture now takes a non-interactive portal frame and crops it with TexGrab's drag overlay. The portal Response match no longer compares the well-known bus name, which had dropped the reply.

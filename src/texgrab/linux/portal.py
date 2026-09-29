@@ -1,9 +1,9 @@
 """xdg-desktop-portal Screenshot and GlobalShortcuts.
 
 GlobalShortcuts is optional. This GNOME 46 session does not export it; the
-caller falls back to a desktop shortcut plus the trigger socket. Screenshot is
-used for the region grab. The first interactive call can show a permission
-dialog — allow screen capture for this process.
+caller falls back to a desktop shortcut plus the trigger socket. Screenshot
+grabs one full frame and does not open the desktop's region tool. The first
+call can show a permission dialog — allow screenshots for this process.
 """
 
 from __future__ import annotations
@@ -44,11 +44,29 @@ def global_shortcuts_available() -> bool:
     return _interface_available("org.freedesktop.portal.GlobalShortcuts")
 
 
-def interactive_screenshot() -> PortalShot:
-    """Block until the user finishes the portal selection dialog."""
+def response_rule(path: str):
+    """Match one portal Request.Response.
+
+    The sender is omitted on purpose. The signal header carries the bus
+    connection's unique name, and comparing that to
+    ``org.freedesktop.portal.Desktop`` drops the message, so the snip waits
+    until the timeout. The object path belongs to this call only.
+    """
+    from jeepney.bus_messages import MatchRule
+
+    return MatchRule(
+        type="signal",
+        interface="org.freedesktop.portal.Request",
+        member="Response",
+        path=path,
+    )
+
+
+def capture_screenshot(timeout: float = 120) -> PortalShot:
+    """Grab one full frame. The desktop region selector is not opened."""
     try:
         from jeepney import DBusAddress, MessageType, new_method_call
-        from jeepney.bus_messages import MatchRule, message_bus
+        from jeepney.bus_messages import message_bus
         from jeepney.io.blocking import open_dbus_connection
         from jeepney.wrappers import DBusErrorResponse, unwrap_msg
     except ImportError as exc:
@@ -57,13 +75,14 @@ def interactive_screenshot() -> PortalShot:
         conn = open_dbus_connection(bus="SESSION")
     except Exception as exc:
         return PortalShot(2, {}, f"session bus unavailable: {exc}")
+    request = ""
     try:
         token = _token("shot")
         request = _request_path(conn.unique_name, token)
         options = {
             "handle_token": ("s", token),
-            "interactive": ("b", True),
-            "modal": ("b", True),
+            "interactive": ("b", False),
+            "modal": ("b", False),
         }
         call = new_method_call(
             DBusAddress(PORTAL_PATH, PORTAL_NAME, "org.freedesktop.portal.Screenshot"),
@@ -71,22 +90,17 @@ def interactive_screenshot() -> PortalShot:
             "sa{sv}",
             ("", options),
         )
-        rule = MatchRule(
-            type="signal",
-            sender=PORTAL_NAME,
-            interface="org.freedesktop.portal.Request",
-            member="Response",
-            path=request,
-        )
+        rule = response_rule(request)
         conn.send_and_get_reply(message_bus.AddMatch(rule))
         with conn.filter(rule, bufsize=4) as queue:
             try:
-                unwrap_msg(conn.send_and_get_reply(call))
+                unwrap_msg(conn.send_and_get_reply(call, timeout=5))
             except DBusErrorResponse as exc:
                 return PortalShot(2, {}, str(exc))
             try:
-                signal = conn.recv_until_filtered(queue, timeout=600)
+                signal = conn.recv_until_filtered(queue, timeout=timeout)
             except TimeoutError:
+                _close_request(conn, request, new_method_call, DBusAddress, unwrap_msg)
                 return PortalShot(2, {}, "screenshot portal timed out")
         if signal.header.message_type != MessageType.signal:
             return PortalShot(2, {}, "screenshot portal returned no response")
@@ -94,6 +108,19 @@ def interactive_screenshot() -> PortalShot:
         return PortalShot(int(response), _unwrap_vardict(results), "")
     finally:
         conn.close()
+
+
+def _close_request(conn, request: str, new_method_call, DBusAddress, unwrap_msg) -> None:
+    if not request:
+        return
+    call = new_method_call(
+        DBusAddress(request, PORTAL_NAME, "org.freedesktop.portal.Request"),
+        "Close",
+    )
+    try:
+        unwrap_msg(conn.send_and_get_reply(call, timeout=2))
+    except Exception:
+        get_logger().info("screenshot portal request already finished")
 
 
 class GlobalShortcutPortal:

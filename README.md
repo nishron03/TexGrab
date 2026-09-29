@@ -31,9 +31,9 @@ The prefix's last component must be `latex-snipper`, Python must be 3.11, and te
 
 ### Allow screen capture
 
-Capture uses the xdg-desktop-portal Screenshot dialog (an interactive region selection). The image is written to a private temp file and deleted before OCR. Nothing is copied to the clipboard by the capture tool.
+Ctrl+Alt+Shift+S freezes the screen and lets you drag a rectangle, in the same way as the Mac selector. Release the mouse and TexGrab copies the LaTeX. Escape cancels: no notification, and the clipboard stays as it was.
 
-The first snip can show a permission dialog. Allow screen capture for the app that launched TexGrab (the terminal, or TexGrab if you started it from a menu). If you dismiss that dialog, the status line says **Needs screen capture** and the notification says **Screen capture permission is required**. Escape, or closing the selector without a region, is silent: no notification, and the clipboard is unchanged.
+The first snip can show one permission dialog: **Allow Applications to Take Screenshots?** Allow it. The rectangle that appears after that is TexGrab's selector. If you deny the dialog, the status line says **Needs screen capture** and the notification says **Screen capture permission is required**. The screen may flash once while the frame is taken. The image is written to a private temp file and deleted before OCR. The capture step copies nothing.
 
 This GNOME session does not offer the GlobalShortcuts portal. TexGrab registers one custom shortcut instead. It does not replace Print, Shift+Print, or Alt+Print.
 
@@ -42,10 +42,10 @@ This GNOME session does not offer the GlobalShortcuts portal. TexGrab registers 
 1. Start `./scripts/run.sh`. Wait until the tray says **Status: Ready**. The first launch says **Loading model…** while torch imports.
 2. Focus the equation.
 3. Press **Ctrl+Alt+Shift+S**.
-4. Drag a tight rectangle around the equation. Include the brackets when the equation is a matrix.
+4. Drag a tight rectangle around the equation. Include the brackets when the equation is a matrix. Release the mouse. Escape throws the selection away.
 5. When the notification says **LaTeX copied to clipboard**, paste. The paste is text.
 
-A second press while a snip is running is ignored. While a snip is in progress the tooltip is **TexGrab…**.
+A second press while the rectangle is up, or while recognition is running, is ignored. Escape or a finished selection clears that lock, and the next press opens the rectangle again. While a snip is in progress the tooltip is **TexGrab…**.
 
 **Test OCR** runs the built-in sample and copies that LaTeX. The sample is matplotlib mathtext, not the font pix2tex was trained on, so that result can be imperfect even when a printed equation works.
 
@@ -95,7 +95,9 @@ Logs are `$XDG_STATE_HOME/texgrab/texgrab.log` (default `~/.local/state/texgrab/
 
 **The LaTeX is wrong.** Select just the formula. pix2tex is best on a tight crop of a printed equation. This project does not train the model.
 
-**Paste is an image.** TexGrab does not put the screenshot on the clipboard. A successful snip is text. `wl-paste -n -t text/plain` prints that text.
+**Paste is an image.** The desktop screenshot tool confirmed a shot. TexGrab's rectangle copies LaTeX when you release the mouse, and the capture step does not put the image on the clipboard. After a successful snip, `wl-paste -n -t text/plain` prints that text.
+
+**The next shortcut does nothing after Escape.** Escape on the rectangle ends the snip. A press while that rectangle is still up is ignored. Quit and start TexGrab again if a snip from an older build is still stuck on the desktop screenshot tool.
 
 ## macOS
 

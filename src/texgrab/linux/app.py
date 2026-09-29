@@ -16,6 +16,7 @@ from texgrab.hotkey.combo import ShortcutChoice, apply_shortcut, default_choice
 from texgrab.linux.binding import BindingManager
 from texgrab.linux.capture import CapturePermissionError, grab_region
 from texgrab.linux.notify import PERMISSION_MESSAGE, notify
+from texgrab.linux.overlay import ensure_gtk
 from texgrab.linux.recorder import prepare_typelib_path, prompt_for_shortcut
 from texgrab.linux.trigger import AlreadyRunning, TriggerServer
 from texgrab.log import get_logger, set_debug
@@ -66,6 +67,8 @@ class LinuxApp:
             os.environ.get("XDG_CURRENT_DESKTOP", ""),
         )
         threading.Thread(target=self._warm_model, name="texgrab-model", daemon=True).start()
+        prepare_typelib_path()
+        ensure_gtk()
         self._server = TriggerServer(self._on_activate)
         self._server.start()
         self._bindings = BindingManager(self._on_activate)
